@@ -1,1 +1,1 @@
-module.exports = require("./src/VictoryConnectClient.js");
+module.exports = require("./src/Client.js");
