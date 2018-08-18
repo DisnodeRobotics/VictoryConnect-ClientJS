@@ -9,11 +9,15 @@ const Consts = require("./Consts")
 class Client extends EventEmitter {
     constructor(id="vc-client-js", name="Generic VictoryConnect NodeJS Client", verbose=true){
         super();
-        this.id = id + "-"+UID(2);
+        this.id = id;
         this.name = name;
         this.sockets = {};
         this.verbose = verbose;
         this.subscriptions = [];
+        this.topics = {};
+
+        this.requestQueue = {};
+
         if(verbose){
             Logger.Info("Client-"+this.id, "constructor", `Creating new client "${this.name}" with id ${this.id}`);
         }
@@ -106,7 +110,11 @@ class Client extends EventEmitter {
     }
 
     OnSubmit(packet){
-      
+        this.topics[packet.path] = packet.data;
+        if(this.requestQueue[packet.path] && this.requestQueue[packet.path].status == "waiting"){
+            this.requestQueue[packet.path].callback(packet);
+            delete this.requestQueue[packet.path];
+        }
         this.GetSubscription(packet);
     }
     
@@ -119,8 +127,12 @@ class Client extends EventEmitter {
         this.SendPacket(Consts.types.COMMAND, "new_topic", [name, path, protocol]);
     }
 
-    GetTopic(){
-
+    GetTopic(path, cb){
+        if(this.verbose){
+            Logger.Info("Client-"+this.id, "GetTopic", `Getting topic ${path}`)
+        }
+        this.requestQueue[path] = {status: "waiting", callback: cb};
+        this.SendPacket(Consts.types.REQUEST, path, []);
     }
 
     SetTopic(path, value){
@@ -149,6 +161,8 @@ class Client extends EventEmitter {
             }
         }
     }
+
+    
 
 
 

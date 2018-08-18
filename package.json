@@ -18,6 +18,7 @@
   "homepage": "https://github.com/DisnodeRobotics/VictoryConnect-ClientJS#readme",
   "dependencies": {
     "disnode-logger": "^0.2.0",
+    "moment": "^2.22.2",
     "uid": "0.0.2"
   }
 }

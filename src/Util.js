@@ -40,10 +40,13 @@ function parseSinglePacket(data) {
 
 exports.buildPacket = function (type, topic, data) {
   if (typeof (data) === "String") {
-    return type + " " + topic + " " + "{" + data + "}"
+    return type + " " + topic + " " + "{" + data + "}~"
+  }
+  else if(!data.length){
+    return type + " " + topic + " " + "{" + data + "}~"
   } else {
   
-    return type + " " + topic + " " + "{" + data.join(';') + "}"
+    return type + " " + topic + " " + "{" + data.join(';') + "}~"
   }
 
 
