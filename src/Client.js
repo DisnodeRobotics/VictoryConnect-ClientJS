@@ -13,7 +13,7 @@ class Client extends EventEmitter {
         this.name = name;
         this.sockets = {};
         this.verbose = verbose;
-
+        this.subscriptions = [];
         if(verbose){
             Logger.Info("Client-"+this.id, "constructor", `Creating new client "${this.name}" with id ${this.id}`);
         }
@@ -35,9 +35,9 @@ class Client extends EventEmitter {
 
                 });
                 this.sockets['TCP'].on("data", (data)=>{
-                    self.OnData(data);
+                    self.OnData(data, "TCP");
                 });
-                self.SendPacket("TCP", Consts.types.COMMAND, "register", [self.id, self.name]);
+                self.SendPacket( Consts.types.COMMAND, "register", [self.id, self.name], "TCP");
                 return res();
             });
         })
@@ -54,18 +54,21 @@ class Client extends EventEmitter {
                 if(self.verbose){
                     Logger.Success("Client-"+this.id, "EnableUDP", "UDP Listening")
                 }
-                self.SendPacket("UDP", Consts.types.COMMAND, "register", [self.id, self.name]);
+                self.SendPacket( Consts.types.COMMAND, "register", [self.id, self.name], "UDP");
                 return res();
             });
             self.sockets['UDP'].on("message", (msg, rInfo)=>{
-                self.OnData(msg);
+            
+                self.OnData(msg, "UDP");
             })
 
         })   
     }
 
-    SendPacket(conType, type, path, data){
-        
+    SendPacket(type, path, data, conType){
+        if(!conType){
+            conType = this.defaultConType;
+        }
         var packetString_ = Util.buildPacket( type, path, data);
         if(this.verbose){
             Logger.Info(`Client-${this.id}`, "SendPacket", "Sending Packet: " + packetString_)
@@ -81,13 +84,30 @@ class Client extends EventEmitter {
     }
 
     // Events
-    OnData(rawData){
+    OnData(rawData, connection){
         var dataString_ = rawData.toString();
-        var dataPacket_ = Util.parse(dataString_);
+        var dataPackets_ = Util.parse(dataString_);
 
-        if(this.verbose){
-            Logger.Info("Client-"+this.id, "OnData", "Got DataPacket: " + JSON.stringify(dataPacket_));
+        for(var i=0;i<dataPackets_.length;i++){
+            var dataPacket_ = dataPackets_[i];
+            dataPacket_.connection = connection;
+            if(this.verbose){
+                Logger.Info("Client-"+this.id, "OnData", "Got DataPacket: " + JSON.stringify(dataPacket_));
+            }
+        
+            
+            switch(dataPacket_.type){
+                case Consts.types.SUBMIT:
+                    this.OnSubmit(dataPacket_);
+                break;
+    
+            }
         }
+    }
+
+    OnSubmit(packet){
+      
+        this.GetSubscription(packet);
     }
     
     // Functions
@@ -96,19 +116,38 @@ class Client extends EventEmitter {
         if(this.verbose){
             Logger.Info("Client-"+this.id, "NewTopic", `Creating new topic ${name} at ${path} using ${protocol}`)
         }
-        this.SendPacket(this.defaultConType, Consts.types.COMMAND, "new_topic", [name, path, protocol]);
+        this.SendPacket(Consts.types.COMMAND, "new_topic", [name, path, protocol]);
     }
 
     GetTopic(){
 
     }
 
-    SetTopic(){
-
+    SetTopic(path, value){
+        if(this.verbose){
+            Logger.Info("Client-"+this.id, "SetTopic", `Seting ${path} to ${value}`)
+        }
+        this.SendPacket(Consts.types.SUBMIT, path, [value])
     }
 
-    Subscribe(){
+    Subscribe(path, callback){
+        if(this.verbose){
+                Logger.Info("Client-"+this.id, "Subscribe", `Subscribing to path ${path}`)
+        }
+        this.SendPacket(Consts.types.COMMAND, "subscribe", [path]);
+        this.subscriptions.push({path: path, callback: callback});
+    }
 
+    GetSubscription(update){
+       
+        for (let i = 0; i < this.subscriptions.length; i++) {
+            const _sub = this.subscriptions[i];
+
+            if(update.path.startsWith(_sub.path)){
+                _sub.callback(update);
+                
+            }
+        }
     }
 
 

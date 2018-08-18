@@ -42,7 +42,7 @@ exports.buildPacket = function (type, topic, data) {
   if (typeof (data) === "String") {
     return type + " " + topic + " " + "{" + data + "}"
   } else {
-
+  
     return type + " " + topic + " " + "{" + data.join(';') + "}"
   }
 
