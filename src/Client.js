@@ -14,6 +14,7 @@ class Client extends EventEmitter {
         this.sockets = {};
         this.verbose = verbose;
         this.subscriptions = [];
+        this.commands = [];
         this.topics = {};
 
         this.requestQueue = {};
@@ -41,7 +42,11 @@ class Client extends EventEmitter {
                 this.sockets['TCP'].on("data", (data)=>{
                     self.OnData(data, "TCP");
                 });
-                self.SendPacket( Consts.types.COMMAND, "register", [self.id, self.name], "TCP");
+                self.SendPacket( Consts.types.COMMAND, "server/register", [self.id, self.name], "TCP");
+
+                setInterval(()=>{
+                    self.SendPacket( Consts.types.COMMAND, "server/heartbeat", [new Date().getTime()], "TCP");
+                }, 250);
                 return res();
             });
         })
@@ -58,13 +63,17 @@ class Client extends EventEmitter {
                 if(self.verbose){
                     Logger.Success("Client-"+this.id, "EnableUDP", "UDP Listening")
                 }
-                self.SendPacket( Consts.types.COMMAND, "register", [self.id, self.name], "UDP");
+        
+                self.SendPacket( Consts.types.COMMAND, "server/register", [self.id, self.name], "UDP");
+                setInterval(()=>{
+                    self.SendPacket( Consts.types.COMMAND, "server/heartbeat", [new Date().getTime()], "UDP");
+                }, 250);
                 return res();
             });
             self.sockets['UDP'].on("message", (msg, rInfo)=>{
             
                 self.OnData(msg, "UDP");
-            })
+            });
 
         })   
     }
@@ -104,7 +113,9 @@ class Client extends EventEmitter {
                 case Consts.types.SUBMIT:
                     this.OnSubmit(dataPacket_);
                 break;
-    
+                case Consts.types.COMMAND:
+                    this.GetCommandReg(dataPacket_);
+                    break;
             }
         }
     }
@@ -124,7 +135,8 @@ class Client extends EventEmitter {
         if(this.verbose){
             Logger.Info("Client-"+this.id, "NewTopic", `Creating new topic ${name} at ${path} using ${protocol}`)
         }
-        this.SendPacket(Consts.types.COMMAND, "new_topic", [name, path, protocol]);
+        this.CallCommand( "server/new_topic", [name, path, protocol]);
+        
     }
 
     GetTopic(path, cb){
@@ -146,15 +158,39 @@ class Client extends EventEmitter {
         if(this.verbose){
                 Logger.Info("Client-"+this.id, "Subscribe", `Subscribing to path ${path}`)
         }
-        this.SendPacket(Consts.types.COMMAND, "subscribe", [path]);
+        this.CallCommand("server/subscribe", [path]);
+      
         this.subscriptions.push({path: path, callback: callback});
+    }
+    CallCommand(path,data){
+        if(this.verbose){
+            Logger.Info("Client-"+this.id, "CallCommand", `Calling command ${path}`)
+        }
+        this.SendPacket(Consts.types.COMMAND, path,data);
+    }
+    RegisterCommand(path, callback){
+        if(this.verbose){
+                Logger.Info("Client-"+this.id, "RegisterCommand", `Registering command ${path}`)
+        }
+        this.SendPacket(Consts.types.COMMAND, "server/command", [path]);
+        this.commands.push({path: path, callback: callback});
+    }
+
+    GetCommandReg(update){
+        for (let i = 0; i < this.commands.length; i++) {
+            const commandReg = this.commands[i];
+           
+            if(update.path.startsWith(commandReg.path)){
+                commandReg.callback(update);
+            }
+        }
     }
 
     GetSubscription(update){
        
         for (let i = 0; i < this.subscriptions.length; i++) {
             const _sub = this.subscriptions[i];
-
+           
             if(update.path.startsWith(_sub.path)){
                 _sub.callback(update);
                 

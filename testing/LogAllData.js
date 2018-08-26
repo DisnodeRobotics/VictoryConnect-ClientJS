@@ -4,10 +4,9 @@ var client = new Client("testing-js", "Victory Connect Client Testing NodeJS", f
 
 client.EnableTCP("127.0.0.1", 5000).then(() => {
     client.SetDefaultConnectionType("TCP");
-    client.NewTopic("Testing Ping", `clients/${client.id}/ping`, "UDP");
 
     setInterval(() => {
-        client.SetTopic(`clients/${client.id}/ping`, new Moment());
+    
         client.GetTopic("*");
         
        
@@ -23,7 +22,7 @@ client.EnableTCP("127.0.0.1", 5000).then(() => {
            
         }, 400);
     
-    }, 1000);
+    }, 3000);
 });
 
 client.EnableUDP("127.0.0.1", 5001, () => { });
