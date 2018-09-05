@@ -16,12 +16,23 @@ class Client extends EventEmitter {
         this.subscriptions = [];
         this.commands = [];
         this.topics = {};
-
+        this.heartbeatFreq = 300;
+        this.heartbeatRetries = 3;
         this.requestQueue = {};
+  
 
         if(verbose){
             Logger.Info("Client-"+this.id, "constructor", `Creating new client "${this.name}" with id ${this.id}`);
         }
+
+        this.RegisterCommand("server/welcome",(packet)=>{
+            this.heartbeatFreq = (parseInt(packet.data[0]) / 2) || 100;
+            this.heartbeatLast = new Date().getTime;
+            this.heartbeatRetries = parseInt(packet.data[1]) || 3;
+            if(verbose){
+                Logger.Success("Client-"+this.id, "constructor", `Client was welcomed! Heartbeat is now ${this.heartbeatFreq}`)
+            }
+        });
     
     }
 
@@ -31,13 +42,20 @@ class Client extends EventEmitter {
 
     EnableTCP(ip="127.0.0.1", port=4056){
         var self = this;
+        
         return new Promise((res,rej)=>{
-            this.sockets['TCP'] = net.createConnection(port, ip, ()=>{
-                if(self.verbose){
-                    Logger.Success("Client-"+this.id, "EnableTCP", "Connected to server‽‽‽")
-                }
-                this.sockets['TCP'].on("connection", ()=>{
+            this.sockets['TCP'].heartbeat = {
+                active: true,
+                lastPacket: new Date().getTime(),
+                failedPackets: 0,
+                ping: 0
+            };
 
+            this.sockets['TCP'] = net.createConnection(port, ip, ()=>{
+                this.sockets['TCP'].on("connection", ()=>{
+                    if(self.verbose){
+                        Logger.Success("Client-"+this.id, "EnableTCP", "Connected to server‽‽‽")
+                    }
                 });
                 this.sockets['TCP'].on("data", (data)=>{
                     self.OnData(data, "TCP");
@@ -46,7 +64,12 @@ class Client extends EventEmitter {
 
                 setInterval(()=>{
                     self.SendPacket( Consts.types.COMMAND, "server/heartbeat", [new Date().getTime()], "TCP");
+                    self.CheckHeartbeat("TCP");
                 }, 250);
+
+                self.RegisterCommand("server/heartbeat_resp", (packet)=>{
+                    self.RecvHeartbeat(packet, "TCP");
+                });
                 return res();
             });
         })
@@ -58,6 +81,12 @@ class Client extends EventEmitter {
         return new Promise((res,rej)=>{
             self.sockets['UDP'] = dgram.createSocket("udp4");
             self.sockets['UDP'].server = {ip: ip, port: port};
+            self.sockets['UDP'].heartbeat = {
+                active: true,
+                lastPacket: new Date().getTime(),
+                failedPackets: 0,
+                ping: 0
+            };
             self.sockets['UDP'].bind();
             self.sockets['UDP'].on("listening", ()=>{
                 if(self.verbose){
@@ -67,7 +96,13 @@ class Client extends EventEmitter {
                 self.SendPacket( Consts.types.COMMAND, "server/register", [self.id, self.name], "UDP");
                 setInterval(()=>{
                     self.SendPacket( Consts.types.COMMAND, "server/heartbeat", [new Date().getTime()], "UDP");
+                    self.CheckHeartbeat("UDP");
                 }, 250);
+                
+                self.RegisterCommand("server/hearbeat_resp", (packet)=>{
+                    self.RecvHeartbeat(packet, "UDP");
+                });
+
                 return res();
             });
             self.sockets['UDP'].on("message", (msg, rInfo)=>{
@@ -76,6 +111,48 @@ class Client extends EventEmitter {
             });
 
         })   
+    }
+
+    RecvHeartbeat(packet, conType) {
+        let timestamp = parseInt(packet.data[0]);
+        let con = this.sockets[conType];
+        if(!con){
+            return;
+        }
+    
+        con.heartbeat.lastPacket = new Date().getTime();
+        con.heartbeat.failed = 0;
+        con.heartbeat.active = true;
+        con.heartbeat.ping =  new Date().getTime() - timestamp;
+    }
+
+    CheckHeartbeat(conType){
+        let con = this.sockets[conType];
+        if(!con.heartbeat){
+            console.log(con);
+            
+            
+            return;
+        }
+        
+        if(con.heartbeat.active == false){
+            return;
+        }
+
+        let delaySinceLast = new Date().getTime() - con.heartbeat.lastPacket;
+        if(delaySinceLast > this.heartbeatFreq){
+            
+            con.heartbeat.failed++;
+            if( con.heartbeat.failed > this.heartbeatRetries){
+                console.log("DEAD");
+                con.heartbeat.active = false;
+            }
+            console.log("TIMEOUT",  con.heartbeat.failed);
+        }else{
+
+            console.log(con.heartbeat.ping);
+            con.heartbeat.failed == 0;
+        }
     }
 
     SendPacket(type, path, data, conType){
@@ -116,6 +193,7 @@ class Client extends EventEmitter {
                 case Consts.types.COMMAND:
                     this.GetCommandReg(dataPacket_);
                     break;
+                    
             }
         }
     }
@@ -197,12 +275,6 @@ class Client extends EventEmitter {
             }
         }
     }
-
-    
-
-
-
-
 }
 
 module.exports = Client;
