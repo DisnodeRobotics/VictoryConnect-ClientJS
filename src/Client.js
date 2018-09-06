@@ -44,21 +44,26 @@ class Client extends EventEmitter {
         var self = this;
         
         return new Promise((res,rej)=>{
-            this.sockets['TCP'].heartbeat = {
+            self.sockets['TCP'].heartbeat = {
                 active: true,
                 lastPacket: new Date().getTime(),
                 failedPackets: 0,
                 ping: 0
             };
-
-            this.sockets['TCP'] = net.createConnection(port, ip, ()=>{
-                this.sockets['TCP'].on("connection", ()=>{
+            self.sockets['UDP'].server = {ip: ip, port: port};
+            self.sockets['TCP'] = net.createConnection(port, ip, ()=>{
+                self.sockets['TCP'].on("connection", ()=>{
                     if(self.verbose){
                         Logger.Success("Client-"+this.id, "EnableTCP", "Connected to server‽‽‽")
                     }
                 });
-                this.sockets['TCP'].on("data", (data)=>{
+                self.sockets['TCP'].on("data", (data)=>{
                     self.OnData(data, "TCP");
+                });
+
+                self.sockets['TCP'].on("error", (data)=>{
+                    Logger.Error("Client", "TCP-ERROR", data);
+                    self.AttemptReconnect("TCP");
                 });
                 self.SendPacket( Consts.types.COMMAND, "server/register", [self.id, self.name], "TCP");
 
@@ -113,6 +118,22 @@ class Client extends EventEmitter {
         })   
     }
 
+    AttemptReconnect(conType){
+        var self = this;
+        setTimeout(()=>{
+            switch(conType){
+                case "TCP":
+                    self.EnableTCP(self.sockets['TCP'].server.ip, self.sockets['TCP'].server.port);
+                break;
+
+                case "UDP":
+                    self.EnableUDP(self.sockets['UDP'].server.ip, self.sockets['UDP'].server.port);
+                break;
+            }
+        },1000);
+    }
+    
+
     RecvHeartbeat(packet, conType) {
         let timestamp = parseInt(packet.data[0]);
         let con = this.sockets[conType];
@@ -144,13 +165,11 @@ class Client extends EventEmitter {
             
             con.heartbeat.failed++;
             if( con.heartbeat.failed > this.heartbeatRetries){
-                console.log("DEAD");
                 con.heartbeat.active = false;
+                Logger.Warning("Client", `${conType}-TIMEOUT`, "Timedout! Reconnecting!")
+                this.AttemptReconnect(conType);
             }
-            console.log("TIMEOUT",  con.heartbeat.failed);
         }else{
-
-            console.log(con.heartbeat.ping);
             con.heartbeat.failed == 0;
         }
     }
