@@ -1,4 +1,6 @@
-exports.parse = function (data) {
+const Packet = require("../networking/Packet");
+
+module.exports.parse = function (data) {
     data = data.toString();
   
     if (data.indexOf("~") == -1) {
@@ -7,12 +9,17 @@ exports.parse = function (data) {
       return [parseSinglePacket(data)];
     } else {
       var packets = data.split("~");
-      packets.splice(packets.length - 1, 1);
+    
       var returnPackets = [];
       for (var i = 0; i < packets.length; i++) {
         var _packet = packets[i];
-        returnPackets.push(parseSinglePacket(_packet));
+        _packet = parseSinglePacket(_packet);
+        if(_packet.isValid()){
+            returnPackets.push(_packet);
+        }
+       
       }
+      
       return returnPackets;
     }
     return null;
@@ -28,12 +35,10 @@ exports.parse = function (data) {
     if (valuesString.indexOf(";") != -1) {
       values = valuesString.split(";");
     }
-    return {
-      raw: data,
-      type: parseInt(commandType),
-      path: commandTopic,
-      dataString: valuesString,
-      data: values
-    }
+    
+    var packet = new Packet(parseInt(commandType), commandTopic, values);
+    packet.setRaw(data);
+
+    return packet;
   }
   

@@ -21,8 +21,23 @@ class Packet{
     }
 
     toString(){
-        return `${type} ${path} {${data.join(";")}}~`;
+        if(Array.isArray(this.data) == false){
+            this.data = [this.data];
+        }
+        return `${this.type} ${this.path} {${this.data.join(";")}}~`;
     }
 
-    
+    isValid(){
+        return this.type != NaN && this.path;
+    }
+
+
 }
+
+module.exports = Packet;
+module.exports.DataType = {
+    ERROR : -1, // Disconnects
+    SUBMIT : 0, // Sending Data
+    REQUEST : 1, // Requesting Data. Usually from server
+    COMMAND: 2
+};
