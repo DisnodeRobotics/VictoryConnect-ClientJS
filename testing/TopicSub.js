@@ -6,7 +6,7 @@ client.enableTCP();
 client.on('ready', ()=>{
     console.log("READY");
     
-    client.subscribe("test/js/1",(packet)=>{
+    client.subscribe("*",(packet)=>{
         console.log(packet.data[0]);
     })
 });

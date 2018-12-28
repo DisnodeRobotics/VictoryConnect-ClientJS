@@ -10,7 +10,7 @@ class Client extends EventEmitter{
         this.name = name;
         this.connections = {};
         this.commandListeners = {};
-        this.subscribeListeners = {};
+        this.subscribeListeners = [];
         this.topicSources = [];
         this.defaultConnection = "TCP";
         this.packetQueue = [];
@@ -145,20 +145,14 @@ class Client extends EventEmitter{
     
 
     onSubmitPacket(submitPacket){
-       
+      for (let i = 0; i < this.subscribeListeners.length; i++) {
+        const _sub = this.subscribeListeners[i];
         
-        if(!this.subscribeListeners[submitPacket.path]){
-            return;
+        if(submitPacket.path.startsWith(_sub.path) || _sub.path == "*"){
+            _sub.cb(submitPacket)
         }
-
-        if(this.subscribeListeners[submitPacket.path].length == 0){
-            return;
-        }
-
-        var listeners = this.subscribeListeners[submitPacket.path];
-        for(var i=0;i<listeners.length;i++){
-            listeners[i](submitPacket);
-        }
+    }
+        
     }
 
     newTopic(name, path, protocol){
@@ -170,11 +164,11 @@ class Client extends EventEmitter{
     }
 
     subscribe(path, cb){
-        if(this.subscribeListeners[path] == null){
-            this.subscribeListeners[path] = [];
-        }
 
-        this.subscribeListeners[path].push(cb);
+        this.subscribeListeners.push({
+            path: path,
+            cb: cb
+        });
         this.sendPacket(this.defaultConnection, new Packet(Packet.DataType.COMMAND, "server/subscribe",[path]));
     }
 
