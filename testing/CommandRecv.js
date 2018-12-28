@@ -4,9 +4,12 @@ var client = new Client("testing-command-recv", "Victory Connect Client Testing 
 client.EnableTCP("127.0.0.1", 5000).then(() => {
     client.SetDefaultConnectionType("TCP");
 
-    client.RegisterCommand("test/command1", (data)=>{
-        let date = new Date(data.data[0]);
-        let ping = new Date().getTime() - date.getTime();
-        console.log(`Command test/command1. Ping ${ping}`);
-    });
+    client.Subscribe("test/source", (data)=>{
+        var packetTime = parseInt(data.data[0]);
+        var currentTime = new Date().getTime();
+
+        console.log("Ping: " + (currentTime-packetTime)+"ms");
+        
+        
+    })
 });

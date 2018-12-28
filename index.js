@@ -1,1 +1,1 @@
-module.exports = require("./src/Client.js");
+module.exports = require("./src/VictoryConnectLib.js");
