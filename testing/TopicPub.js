@@ -8,7 +8,7 @@ client.on('ready', ()=>{
     
     client.newTopic("Test JS Topic #1", "test/js/1", "TCP");
     setInterval(()=>{
-        client.setTopic("test/js/1", [new Date().getTime()]);
+        client.setTopic("test/js/1", [Math.random()]);
     }, 1000);
 });
 

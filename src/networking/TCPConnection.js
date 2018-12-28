@@ -3,8 +3,10 @@ const Net = require("net");
 const PacketParser = require("../util/PacketParser");
 const Consts = require("../util/Consts");
 const Packet = require("./Packet");
-class TCPConnection {
+const EventEmitter = require( 'events' );
+class TCPConnection extends EventEmitter{
     constructor(serverIP, serverPort) {
+        super();
         this.serverIP = serverIP;   // IP of the VC server 
         this.serverPort = serverPort; // Port for the TCP socket on the VC Server
         this.socket = null; // TCP Socket Object
@@ -17,27 +19,24 @@ class TCPConnection {
         Logger.Info("TCPConnection", "constructor", `New TCPConnection constructed. ServerIP: ${serverIP} ServerPort: ${serverPort}`);
     }
 
-    bindOnPacket(callback) {
-        this.onPacketBind = callback;
-    }
+   
     connect() {
-        return new Promise(res => {
-            Logger.Info("TCPConnection", "connect", `Connecting to ${this.serverIP}:${this.serverPort}`);
-            if (this.isConnected) {
-                Logger.Info("TCPConnection", "connect", `Already connected. Disconnecting first.`);
-                this.disconnect();
-            }
-            this.socket = new Net.Socket();
-            this.socket.on("error", (err) => { this.onError(err) });
-            this.startListening();
-            this.socket.connect(this.serverPort, this.serverIP, () => {
-                Logger.Success("TCPConnection", "connect", "Connected to VC TCP Server Socket!");
-                this.isConnected = true;
-                this.isReconnecting = false;
-               
-                return res();
-            });
-        })
+        Logger.Info("TCPConnection", "connect", `Connecting to ${this.serverIP}:${this.serverPort}`);
+        if (this.isConnected) {
+            Logger.Info("TCPConnection", "connect", `Already connected. Disconnecting first.`);
+            this.disconnect();
+        }
+        this.socket = new Net.Socket();
+        this.socket.on("error", (err) => { this.onError(err) });
+        this.startListening();
+        var self = this;
+        this.socket.connect(this.serverPort, this.serverIP, () => {
+            Logger.Success("TCPConnection", "connect", "Connected to VC TCP Server Socket!");
+            self.isConnected = true;
+            self.isReconnecting = false;
+           
+            self.emit("connected");
+        });
     }
 
     attemptReconnect() {
@@ -65,11 +64,9 @@ class TCPConnection {
             var packets = PacketParser.parse(dataString);
            
             
-            if (self.onPacketBind) {
-                for(var i=0;i<packets.length;i++){
-                    self.onPacketBind(packets[i]);
-                }
-            
+            for(var i=0;i<packets.length;i++){
+                self.emit("packet",packets[i]);
+              
             }
         });
     }

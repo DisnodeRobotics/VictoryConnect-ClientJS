@@ -23,6 +23,9 @@ class Client extends EventEmitter{
         self.registerCommand("server/welcome", (packet)=>{
             var conType = packet.data[0];
             var hbInterval = packet.data[1];
+            
+          
+          
 
             Logger.Success("Client", "server/welcome", "Server welcome! H/B interval for " + conType + " = " + hbInterval);
 
@@ -42,15 +45,15 @@ class Client extends EventEmitter{
     enableTCP() {
         var self = this;
         var tcpCon = new TCPConnection("127.0.0.1", 5000);
-        tcpCon.bindOnPacket((packet)=>{
+        tcpCon.on("packet",(packet)=>{
             self.onPacket(packet);
         });
-        tcpCon.connect().then(()=>{
-           
+        tcpCon.on("connected",()=>{  console.log("CONNECTD!");
             
             self.sendPacket(self.defaultConnection,new Packet(Consts.packetTypes.COMMAND,"server/register",[self.id, self.name]))
             self.connections["TCP"] = tcpCon;
-        });
+        })
+        tcpCon.connect();
 
     
     }
