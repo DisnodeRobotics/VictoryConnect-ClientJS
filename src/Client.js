@@ -42,9 +42,9 @@ class Client extends EventEmitter{
         this.startTickLoop();
     }
 
-    enableTCP() {
+    enableTCP(ip, port) {
         var self = this;
-        var tcpCon = new TCPConnection("127.0.0.1", 5000);
+        var tcpCon = new TCPConnection(ip, port);
         tcpCon.on("packet",(packet)=>{
             self.onPacket(packet);
         });
