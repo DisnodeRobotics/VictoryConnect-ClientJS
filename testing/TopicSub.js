@@ -1,13 +1,23 @@
 const Client = require("../src/Client");
 
 var client = new Client("topic-sub-js","Topic Sub JS Client");
-client.enableTCP("10.0.0.17", 5000);
+
+client.useMDNS(
+    // TCP
+    (ip, port)=>{
+        client.enableTCP(ip,port)
+    },  
+    //UDP
+    (ip, port)=>{
+       client.enableUDP(ip,port)
+    }
+);
 
 client.on('ready', ()=>{
     console.log("READY");
     
-    client.subscribe("*",(packet)=>{
-        console.log(packet.data[0]);
+    client.subscribe("pathfinder/",(packet)=>{
+        console.log(packet.data);
     })
 });
 

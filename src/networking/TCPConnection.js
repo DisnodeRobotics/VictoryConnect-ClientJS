@@ -3,8 +3,8 @@ const Net = require("net");
 const PacketParser = require("../util/PacketParser");
 const Consts = require("../util/Consts");
 const Packet = require("./Packet");
-const EventEmitter = require( 'events' );
-class TCPConnection extends EventEmitter{
+const EventEmitter = require('events');
+class TCPConnection extends EventEmitter {
     constructor(serverIP, serverPort) {
         super();
         this.serverIP = serverIP;   // IP of the VC server 
@@ -14,12 +14,13 @@ class TCPConnection extends EventEmitter{
         this.reconnectAttempt = 0;          // How many times have we tried to reconnect
         this.isReconnecting = false;      // Are we currently trying to reconnect
         this.isConnected = false;
+        this.currentPing  = -1;
 
 
         Logger.Info("TCPConnection", "constructor", `New TCPConnection constructed. ServerIP: ${serverIP} ServerPort: ${serverPort}`);
     }
 
-   
+
     connect() {
         Logger.Info("TCPConnection", "connect", `Connecting to ${this.serverIP}:${this.serverPort}`);
         if (this.isConnected) {
@@ -27,14 +28,12 @@ class TCPConnection extends EventEmitter{
             this.disconnect();
         }
         this.socket = new Net.Socket();
+
         this.socket.on("error", (err) => { this.onError(err) });
         this.startListening();
         var self = this;
         this.socket.connect(this.serverPort, this.serverIP, () => {
             Logger.Success("TCPConnection", "connect", "Connected to VC TCP Server Socket!");
-            self.isConnected = true;
-            self.isReconnecting = false;
-           
             self.emit("connected");
         });
     }
@@ -59,15 +58,26 @@ class TCPConnection extends EventEmitter{
 
     startListening() {
         var self = this;
+        this.currentPacket = "";
+
         this.socket.on("data", (rawData) => {
-            var dataString = rawData.toString();
-            var packets = PacketParser.parse(dataString);
            
             
-            for(var i=0;i<packets.length;i++){
-                self.emit("packet",packets[i]);
-              
+            var dataString = rawData.toString();
+         
+            self.currentPacket += dataString;
+
+            if (self.currentPacket.indexOf("~") != -1) {
+                
+                var packets = PacketParser.parse( self.currentPacket);
+                for (var i = 0; i < packets.length; i++) {
+                    self.emit("packet", packets[i]);
+                }
+                self.currentPacket = "";
+            }else{
+                console.log("INCOMPLETE PACKET");
             }
+
         });
     }
 
@@ -77,8 +87,10 @@ class TCPConnection extends EventEmitter{
         this.attemptReconnect();
     }
 
-    startHeartbeat(interval) {
+    onWelcomed(interval) {
         var self = this;
+        self.isConnected = true;
+        self.isReconnecting = false;
         Logger.Info("TCPConnection", "startHeartbeat", `Starting HB with interval: ${interval}`)
         const hbInterval = setInterval(() => {
             if (!self.isConnected) {
@@ -86,21 +98,23 @@ class TCPConnection extends EventEmitter{
                 clearInterval(hbInterval);
             }
 
-            self.sendPacket(new Packet(Consts.packetTypes.COMMAND, "server/heartbeat", [new Date().getTime()]));
+            self.sendPacket(new Packet(Consts.packetTypes.COMMAND, "server/heartbeat", [new Date().getTime(), self.currentPing]));
         }, interval);
     }
-
+    recvHeartbeat(timestamp){
+        timestamp = parseInt(timestamp);
+        this.currentPing = new Date().getTime() - timestamp;
+    }
     sendPacket(packet) {
-        if (!this.isConnected) {
-            return;
-        }
-
+      
+        
         if (!this.socket) {
             return;
         }
 
         var stringPacket = packet.toString();
         this.socket.write(stringPacket);
+      
     }
 
 

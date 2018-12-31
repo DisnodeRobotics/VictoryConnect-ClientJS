@@ -1,4 +1,5 @@
 const TCPConnection = require("./networking/TCPConnection");
+const UDPConnection = require("./networking/UDPConnection")
 const Packet = require("./networking/Packet");
 const Consts = require("./util/Consts");
 const Logger = require("disnode-logger");
@@ -16,7 +17,7 @@ class Client extends EventEmitter {
         this.defaultConnection = "TCP";
         this.packetQueue = [];
         this.isASAP = false;
-        this.tickRate = 50;
+        this.tickRate = 100;
 
         Logger.Info("Client", "constructor", `Client created id ${this.id} name ${this.name}`)
 
@@ -25,9 +26,6 @@ class Client extends EventEmitter {
             var conType = packet.data[0];
             var hbInterval = packet.data[1];
 
-
-
-
             Logger.Success("Client", "server/welcome", "Server welcome! H/B interval for " + conType + " = " + hbInterval);
 
             if (!self.connections[conType]) {
@@ -35,10 +33,24 @@ class Client extends EventEmitter {
                 return;
             }
 
-            self.connections[conType].startHeartbeat(hbInterval);
+            self.connections[conType].onWelcomed(hbInterval);
 
             self.emit("ready", conType);
         });
+        
+        self.registerCommand("server/hearbeat_resp", (packet) => {
+            var timestamp = packet.data[0];
+            var conType  = packet.data[1];
+
+        
+            if (!self.connections[conType]) {
+                Logger.Error("Client", "server/hearbeat_resp", "Server welcomed a connection that did not exist: " + conType);
+                return;
+            }
+
+            self.connections[conType].recvHeartbeat(timestamp);
+        });
+
 
         this.startTickLoop();
     }
@@ -95,12 +107,27 @@ class Client extends EventEmitter {
             self.onPacket(packet);
         });
         tcpCon.on("connected", () => {
-            console.log("CONNECTD!");
-
-            self.sendPacket(self.defaultConnection, new Packet(Consts.packetTypes.COMMAND, "server/register", [self.id, self.name]))
             self.connections["TCP"] = tcpCon;
+            self.sendPacket("TCP", new Packet(Consts.packetTypes.COMMAND, "server/register", [self.id, self.name]))
         })
         tcpCon.connect();
+
+
+    }
+
+    enableUDP(ip, port) {
+        var self = this;
+        var udpCon = new UDPConnection(ip, port);
+        udpCon.on("packet", (packet) => {
+            self.onPacket(packet);
+        });
+        udpCon.on("connected", () => {
+           
+            self.connections["UDP"] = udpCon;
+            self.sendPacket("UDP", new Packet(Consts.packetTypes.COMMAND, "server/register", [self.id, self.name]))
+            
+        })
+        udpCon.connect();
 
 
     }
@@ -138,11 +165,11 @@ class Client extends EventEmitter {
 
             if (connection) {
                 connection.sendPacket(packet);
-
+  
+                
                 this.packetQueue.splice(i, 1);
-
-
-
+            }else{
+               
             }
 
         }
